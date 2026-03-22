@@ -22,73 +22,131 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Bubblewrap non-interactive
-        run: npm install -g @bubblewrap/cli
-
-      - name: Create twa.json config manually
+      - name: Build TWA APK directly with Gradle
         run: |
-          HOST=$(echo '${{ github.event.inputs.site_url }}' | sed 's|https://||' | sed 's|http://||' | sed 's|/||g')
-          JAVA_PATH=$(dirname $(dirname $(readlink -f $(which java))))
-          
-          mkdir -p twa
-          cat > twa/twa-manifest.json << EOF
-          {
-            "packageId": "com.todopro.app",
-            "host": "${HOST}",
-            "name": "Todo Pro",
-            "launcherName": "Todo Pro",
-            "display": "standalone",
-            "themeColor": "#050505",
-            "navigationColor": "#050505",
-            "navigationColorDark": "#050505",
-            "navigationDividerColor": "#050505",
-            "navigationDividerColorDark": "#050505",
-            "backgroundColor": "#050505",
-            "enableNotifications": true,
-            "startUrl": "/",
-            "iconUrl": "${{ github.event.inputs.site_url }}/unnamed.png",
-            "maskableIconUrl": "${{ github.event.inputs.site_url }}/unnamed.png",
-            "monochromeIconUrl": "${{ github.event.inputs.site_url }}/unnamed.png",
-            "splashScreenFadeOutDuration": 300,
-            "signingKey": {
-              "path": "./android.keystore",
-              "alias": "android"
-            },
-            "appVersionCode": 1,
-            "appVersion": "1.0.0",
-            "shortcuts": [],
-            "generatorApp": "bubblewrap-cli",
-            "webManifestUrl": "${{ github.event.inputs.site_url }}/manifest.json",
-            "fallbackType": "customtabs",
-            "features": {},
-            "alphaDependencies": false,
-            "enableSiteSettingsShortcut": true,
-            "isChromeOSOnly": false,
-            "isMetaQuest": false,
-            "fullScopeUrl": "${{ github.event.inputs.site_url }}/",
-            "minSdkVersion": 19,
-            "orientation": "portrait",
-            "fingerprints": [],
-            "sdkVersion": 34,
-            "sdkVersionName": "34",
-            "jdkPath": "${JAVA_PATH}"
+          HOST=$(echo '${{ github.event.inputs.site_url }}' | sed 's|https://||' | sed 's|http://||' | sed 's|/.*||')
+          URL='${{ github.event.inputs.site_url }}'
+
+          mkdir -p TodoProApp/app/src/main/res/values
+          mkdir -p TodoProApp/app/src/main/res/xml
+          mkdir -p TodoProApp/app/src/main/java/com/todopro/app
+
+          # settings.gradle
+          cat > TodoProApp/settings.gradle << 'EOF'
+          pluginManagement {
+            repositories {
+              google()
+              mavenCentral()
+              gradlePluginPortal()
+            }
+          }
+          dependencyResolutionManagement {
+            repositories {
+              google()
+              mavenCentral()
+            }
+          }
+          rootProject.name = "TodoPro"
+          include ':app'
+          EOF
+
+          # root build.gradle
+          cat > TodoProApp/build.gradle << 'EOF'
+          plugins {
+            id 'com.android.application' version '8.2.0' apply false
           }
           EOF
 
-      - name: Build APK with Bubblewrap
-        run: |
-          cd twa
-          bubblewrap build --skipPwaValidation --manifest ./twa-manifest.json
+          # app/build.gradle
+          cat > TodoProApp/app/build.gradle << EOF
+          plugins {
+            id 'com.android.application'
+          }
+          android {
+            namespace 'com.todopro.app'
+            compileSdk 34
+            defaultConfig {
+              applicationId "com.todopro.app"
+              minSdk 19
+              targetSdk 34
+              versionCode 1
+              versionName "1.0"
+            }
+            buildTypes {
+              release {
+                minifyEnabled false
+              }
+            }
+          }
+          dependencies {
+            implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+          }
+          EOF
 
-      - name: Find and upload APK
+          # AndroidManifest.xml
+          cat > TodoProApp/app/src/main/AndroidManifest.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-permission android:name="android.permission.INTERNET"/>
+            <application
+              android:label="Todo Pro"
+              android:theme="@style/AppTheme"
+              android:allowBackup="true">
+              <activity
+                android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+                android:exported="true">
+                <meta-data
+                  android:name="android.support.customtabs.trusted.DEFAULT_URL"
+                  android:value="${URL}"/>
+                <intent-filter android:autoVerify="true">
+                  <action android:name="android.intent.action.MAIN"/>
+                  <category android:name="android.intent.category.LAUNCHER"/>
+                </intent-filter>
+                <intent-filter android:autoVerify="true">
+                  <action android:name="android.intent.action.VIEW"/>
+                  <category android:name="android.intent.category.DEFAULT"/>
+                  <category android:name="android.intent.category.BROWSABLE"/>
+                  <data android:scheme="https" android:host="${HOST}"/>
+                </intent-filter>
+              </activity>
+            </application>
+          </manifest>
+          EOF
+
+          # strings.xml
+          cat > TodoProApp/app/src/main/res/values/strings.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <string name="app_name">Todo Pro</string>
+          </resources>
+          EOF
+
+          # styles.xml
+          cat > TodoProApp/app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <style name="AppTheme" parent="android:Theme.Black.NoTitleBar.Fullscreen"/>
+          </resources>
+          EOF
+
+          # gradle wrapper
+          mkdir -p TodoProApp/gradle/wrapper
+          cat > TodoProApp/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          cd TodoProApp
+          gradle wrapper --gradle-version 8.2 --no-daemon || true
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TodoPro-APK
-          path: |
-            twa/*.apk
-            twa/app/build/outputs/apk/**/*.apk
-          if-no-files-found: warn
+          path: TodoProApp/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
