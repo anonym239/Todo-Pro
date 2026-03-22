@@ -36,27 +36,22 @@ jobs:
       - name: Init TWA Project
         run: |
           mkdir twa && cd twa
-          bubblewrap init \
+          HOST=$(echo '${{ github.event.inputs.site_url }}' | sed 's|https://||' | sed 's|http://||')
+          # "n" = benutze eigenes JDK (bereits installiert), kein interaktiver Prompt
+          echo "n" | bubblewrap init \
             --manifest "${{ github.event.inputs.site_url }}/manifest.json" \
-            --directory . \
-            --chromeOsOnly false \
-            --host "$(echo '${{ github.event.inputs.site_url }}' | sed 's|https://||')" \
-            --name "Todo Pro" \
-            --launcherName "Todo Pro" \
-            --themeColor "#050505" \
-            --backgroundColor "#050505" \
-            --startUrl "/" \
-            --iconUrl "${{ github.event.inputs.site_url }}/unnamed.png" \
-            --maskableIconUrl "${{ github.event.inputs.site_url }}/unnamed.png"
+            --directory .
 
       - name: Build APK
         run: |
           cd twa
-          bubblewrap build --skipPwaValidation
+          echo "n" | bubblewrap build --skipPwaValidation
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TodoPro-APK
-          path: twa/app-release-unsigned.apk
+          path: |
+            twa/app-release-unsigned.apk
+            twa/*.apk
           retention-days: 30
