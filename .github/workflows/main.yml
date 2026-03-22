@@ -2,11 +2,6 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
-    inputs:
-      site_url:
-        description: 'Deine Netlify URL'
-        required: true
-        default: 'https://todo-pro.netlify.app'
 
 jobs:
   build-apk:
@@ -22,131 +17,135 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build TWA APK directly with Gradle
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create TWA Project
         run: |
-          HOST=$(echo '${{ github.event.inputs.site_url }}' | sed 's|https://||' | sed 's|http://||' | sed 's|/.*||')
-          URL='${{ github.event.inputs.site_url }}'
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
 
-          mkdir -p TodoProApp/app/src/main/res/values
-          mkdir -p TodoProApp/app/src/main/res/xml
-          mkdir -p TodoProApp/app/src/main/java/com/todopro/app
-
-          # settings.gradle
-          cat > TodoProApp/settings.gradle << 'EOF'
+          cat > settings.gradle.kts << 'EOF'
           pluginManagement {
-            repositories {
-              google()
-              mavenCentral()
-              gradlePluginPortal()
-            }
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
           }
           dependencyResolutionManagement {
-            repositories {
-              google()
-              mavenCentral()
-            }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
           }
           rootProject.name = "TodoPro"
-          include ':app'
+          include(":app")
           EOF
 
-          # root build.gradle
-          cat > TodoProApp/build.gradle << 'EOF'
+          cat > build.gradle.kts << 'EOF'
           plugins {
-            id 'com.android.application' version '8.2.0' apply false
+              id("com.android.application") version "8.1.4" apply false
           }
           EOF
 
-          # app/build.gradle
-          cat > TodoProApp/app/build.gradle << EOF
+          cat > gradle.properties << 'EOF'
+          android.useAndroidX=true
+          EOF
+
+          cat > app/build.gradle.kts << 'EOF'
           plugins {
-            id 'com.android.application'
+              id("com.android.application")
           }
           android {
-            namespace 'com.todopro.app'
-            compileSdk 34
-            defaultConfig {
-              applicationId "com.todopro.app"
-              minSdk 19
-              targetSdk 34
-              versionCode 1
-              versionName "1.0"
-            }
-            buildTypes {
-              release {
-                minifyEnabled false
+              namespace = "com.todopro.app"
+              compileSdk = 34
+              defaultConfig {
+                  applicationId = "com.todopro.app"
+                  minSdk = 21
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
               }
-            }
+              buildTypes {
+                  getByName("debug") {
+                      isDebuggable = true
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
           }
           dependencies {
-            implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+              implementation("com.google.androidbrowserhelper:androidbrowserhelper:2.5.0")
           }
           EOF
 
-          # AndroidManifest.xml
-          cat > TodoProApp/app/src/main/AndroidManifest.xml << EOF
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <uses-permission android:name="android.permission.INTERNET"/>
-            <application
-              android:label="Todo Pro"
-              android:theme="@style/AppTheme"
-              android:allowBackup="true">
-              <activity
-                android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
-                android:exported="true">
-                <meta-data
-                  android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                  android:value="${URL}"/>
-                <intent-filter android:autoVerify="true">
-                  <action android:name="android.intent.action.MAIN"/>
-                  <category android:name="android.intent.category.LAUNCHER"/>
-                </intent-filter>
-                <intent-filter android:autoVerify="true">
-                  <action android:name="android.intent.action.VIEW"/>
-                  <category android:name="android.intent.category.DEFAULT"/>
-                  <category android:name="android.intent.category.BROWSABLE"/>
-                  <data android:scheme="https" android:host="${HOST}"/>
-                </intent-filter>
-              </activity>
-            </application>
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <application
+                  android:allowBackup="true"
+                  android:label="Todo Pro"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.App">
+                  <activity
+                      android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+                      android:exported="true">
+                      <meta-data
+                          android:name="android.support.customtabs.trusted.DEFAULT_URL"
+                          android:value="https://todo-list43.netlify.app"/>
+                      <intent-filter android:autoVerify="true">
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                      <intent-filter android:autoVerify="true">
+                          <action android:name="android.intent.action.VIEW"/>
+                          <category android:name="android.intent.category.DEFAULT"/>
+                          <category android:name="android.intent.category.BROWSABLE"/>
+                          <data android:scheme="https" android:host="todo-list43.netlify.app"/>
+                      </intent-filter>
+                  </activity>
+              </application>
           </manifest>
           EOF
 
-          # strings.xml
-          cat > TodoProApp/app/src/main/res/values/strings.xml << 'EOF'
+          cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-            <string name="app_name">Todo Pro</string>
+              <style name="Theme.App" parent="android:Theme.Black.NoTitleBar.Fullscreen"/>
           </resources>
           EOF
 
-          # styles.xml
-          cat > TodoProApp/app/src/main/res/values/styles.xml << 'EOF'
+          cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-            <style name="AppTheme" parent="android:Theme.Black.NoTitleBar.Fullscreen"/>
+              <string name="app_name">Todo Pro</string>
           </resources>
           EOF
 
-          # gradle wrapper
-          mkdir -p TodoProApp/gradle/wrapper
-          cat > TodoProApp/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+      - name: Setup Gradle Wrapper
+        run: |
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           EOF
+          gradle wrapper --gradle-version=8.4 --no-daemon
 
-          cd TodoProApp
-          gradle wrapper --gradle-version 8.2 --no-daemon || true
+      - name: Build Debug APK
+        run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --info 2>&1 | tail -50
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TodoPro-APK
-          path: TodoProApp/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
