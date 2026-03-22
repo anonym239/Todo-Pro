@@ -1,0 +1,62 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: 'Deine Netlify URL (z.B. https://todo-pro.netlify.app)'
+        required: true
+        default: 'https://todo-pro.netlify.app'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
+
+      - name: Init TWA Project
+        run: |
+          mkdir twa && cd twa
+          bubblewrap init \
+            --manifest "${{ github.event.inputs.site_url }}/manifest.json" \
+            --directory . \
+            --chromeOsOnly false \
+            --host "$(echo '${{ github.event.inputs.site_url }}' | sed 's|https://||')" \
+            --name "Todo Pro" \
+            --launcherName "Todo Pro" \
+            --themeColor "#050505" \
+            --backgroundColor "#050505" \
+            --startUrl "/" \
+            --iconUrl "${{ github.event.inputs.site_url }}/unnamed.png" \
+            --maskableIconUrl "${{ github.event.inputs.site_url }}/unnamed.png"
+
+      - name: Build APK
+        run: |
+          cd twa
+          bubblewrap build --skipPwaValidation
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TodoPro-APK
+          path: twa/app-release-unsigned.apk
+          retention-days: 30
